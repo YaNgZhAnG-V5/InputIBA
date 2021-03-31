@@ -132,15 +132,21 @@ class TorchWelfordEstimator(nn.Module):
 
     def forward(self, x):
         """ Update estimates without altering x """
+        # only take packed output and unpack for further usage
+        output_padded, text_lengths = nn.utils.rnn.pad_packed_sequence(x[0])
+        output_padded = output_padded.reshape(-1, output_padded.shape[-1])
         if self.shape is None:
             # Initialize runnnig mean and std on first datapoint
-            self._init(x.shape[1:], x.device)
-        for xi in x:
+            self._init(output_padded.shape[1:], output_padded.device)
+        for xi in output_padded:
             self._neuron_nonzero += (xi != 0.).long()
             old_m = self.m.clone()
             self.m = self.m + (xi - self.m) / (self._n_samples.float() + 1)
             self.s = self.s + (xi - self.m) * (xi - old_m)
-            self._n_samples += 1
+        
+        # consider a sentence as one sample for estimation
+        self._n_samples += len(text_lengths)
+        # x = nn.utils.rnn.pack_padded_sequence(x, text_lengths.to('cpu'))
         return x
 
     def n_samples(self):
@@ -267,10 +273,17 @@ class IBA(nn.Module):
             raise ValueError(
                 'context and layer cannot be None at the same time')
 
-    def _reset_alpha(self):
+    def _reset_alpha(self, sentence_length):
         """ Used to reset the mask to train on another sample """
         with torch.no_grad():
-            self.alpha.fill_(self.initial_alpha)
+            self.alpha = nn.Parameter(torch.full(self.estimator.shape,
+                          self.initial_alpha,
+                          device=self.estimator.device),
+                          requires_grad=True)
+            self.alpha = nn.Parameter(torch.full(self.alpha.expand(sentence_length, 1, -1).shape,
+                          self.initial_alpha,
+                          device=self.estimator.device),
+                          requires_grad=True)
 
     def _build(self):
         """
@@ -376,25 +389,28 @@ class IBA(nn.Module):
         if self._active_neurons is None:
             self._active_neurons = self.estimator.active_neurons()
 
+        # get output
+        output, hidden_and_cell = x
+        output_padded, text_lengths = nn.utils.rnn.pad_packed_sequence(output)
+
         # Smoothen and expand alpha on batch dimension
         lamb = self.sigmoid(alpha)
-        lamb = lamb.expand(x.shape[0], x.shape[1], -1, -1)
+        lamb = lamb.expand(output_padded.shape[0], 1, -1)
         lamb = self.smooth(lamb) if self.smooth is not None else lamb
 
-        self._buffer_capacity = self._kl_div(x, lamb, self._mean,
-                                             self._std) * self._active_neurons
-
-        eps = x.data.new(x.size()).normal_()
+        self._buffer_capacity = self._kl_div(output_padded, lamb, self._mean.expand(output_padded.shape[0], 1, -1),
+                                             self._std.expand(output_padded.shape[0], 1, -1)) * self._active_neurons
+        eps = output_padded.data.new(output_padded.size()).normal_()
         ε = self._std * eps + self._mean
         λ = lamb
         if self.reverse_lambda:
-            z = λ * ε + (1 - λ) * x
+            z = λ * ε + (1 - λ) * output_padded
         elif self.combine_loss:
-            z_positive = λ * x + (1 - λ) * ε
-            z_negative = λ * ε + (1 - λ) * x
+            z_positive = λ * output_padded + (1 - λ) * ε
+            z_negative = λ * ε + (1 - λ) * output_padded
             z = torch.cat((z_positive, z_negative))
         else:
-            z = λ * x + (1 - λ) * ε
+            z = λ * output_padded + (1 - λ) * ε
         z *= self._active_neurons
 
         # Sample new output values from p(z|x)
@@ -402,8 +418,10 @@ class IBA(nn.Module):
         # Clamp output, if input was post-relu
         if self.relu:
             z = torch.clamp(z, 0.0)
-
-        return z
+        
+        # pack value again to pass to later layer
+        z_packed = (nn.utils.rnn.pack_padded_sequence(z, text_lengths), hidden_and_cell)
+        return z_packed
 
     @contextmanager
     def enable_estimation(self):
@@ -462,16 +480,18 @@ class IBA(nn.Module):
             self.reset_estimate()
         for batch in dataloader:
             if isinstance(batch, tuple) or isinstance(batch, list):
-                imgs = batch[0]
+                #TODO rethink for nlp
+                # imgs = batch[0]
+                raise NotImplementedError
             else:
-                imgs = batch['img']
+                text, text_lengths = batch.text
             if self.estimator.n_samples() > n_samples:
                 break
             with torch.no_grad(), self.interrupt_execution(
             ), self.enable_estimation():
-                model(imgs.to(device))
+                model(text.to(device), text_lengths)
             if bar:
-                bar.update(len(imgs))
+                bar.update(len(text_lengths))
         if bar:
             bar.close()
 
@@ -528,12 +548,12 @@ class IBA(nn.Module):
         Returns:
             The heatmap of the same shape as the ``input_t``.
         """
-        assert input_t.shape[0] == 1, "We can only fit one sample a time"
+        assert input_t.shape[1] == 1, "We can only fit one sample a time"
 
-        batch = input_t.expand(batch_size, -1, -1, -1)
+        batch = input_t.expand(-1, batch_size)
 
         # Reset from previous run or modifications
-        self._reset_alpha()
+        self._reset_alpha(input_t.shape[0])
         optimizer = torch.optim.Adam(lr=lr, params=[self.alpha])
 
         if self.estimator.n_samples() < 1000:
@@ -587,13 +607,13 @@ class IBA(nn.Module):
         over the redundant batch dimension.
         Shape is ``(self.channels, self.height, self.width)``
         """
-        return self._buffer_capacity.mean(dim=0)
+        return self._buffer_capacity.mean(dim=1)
 
     def _get_saliency(self, mode='saliency', shape=None):
         capacity_np = self.capacity().detach().cpu().numpy()
         if mode == "saliency":
-            # In bits, summed over channels, scaled to input
-            return to_saliency_map(capacity_np, shape)
+            # In bits, summed over hidden dims
+            return capacity_np.sum(1)
         elif mode == "capacity":
             # In bits, not summed, not scaled
             return capacity_np / float(np.log(2))

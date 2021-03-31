@@ -5,6 +5,8 @@ import warnings
 from contextlib import contextmanager
 from .utils import to_saliency_map, get_tqdm, ifnone
 from .pytorch import _SpatialGaussianKernel
+from .model_zoo import get_module
+from .pytorch import _IBAForwardHook
 
 
 class ImageIBA(nn.Module):
@@ -12,6 +14,7 @@ class ImageIBA(nn.Module):
     def __init__(self,
                  img,
                  img_mask,
+                 context=None,
                  sigma=1.,
                  img_eps_std=None,
                  img_eps_mean=None,
@@ -27,6 +30,7 @@ class ImageIBA(nn.Module):
         self.alpha = None  # Initialized on first forward pass
         self.img_mask = img_mask
         self.img = img
+        self.context = context
         self.img_eps_std = img_eps_std
         self.img_eps_mean = img_eps_mean
         self.progbar = progbar
@@ -39,14 +43,36 @@ class ImageIBA(nn.Module):
         self._restrict_flow = False
         self.reverse_lambda = reverse_lambda
         self.combine_loss = combine_loss
+
+        # Attach the bottleneck after the input as forward hook
+        # TODO we put this hook at input position of the first model. Make sure to pass this position as parameter
+        if self.context is not None:
+            self._hook_handle = get_module(
+                self.context.classifier,
+                'embedding').register_forward_hook(
+                    _IBAForwardHook(self, 'output'))
+        elif self.layer is not None:
+            self._hook_handle = self.layer.register_forward_hook(
+                _IBAForwardHook(self, 'output'))
+        else:
+            raise ValueError(
+                'context and layer cannot be None at the same time')
+
         # initialize alpha
         if self.alpha is None:
             self._build()
 
-    def _reset_alpha(self):
+    def _reset_alpha(self, sentence_length):
         """ Used to reset the mask to train on another sample """
         with torch.no_grad():
-            self.alpha.fill_(self.initial_alpha)
+            self.alpha = nn.Parameter(torch.full(self.img_mask.shape,
+                                                 self.initial_alpha,
+                                                 device=self.device),
+                                      requires_grad=True)
+            # self.alpha = nn.Parameter(torch.full(self.alpha.expand(sentence_length, 1, -1).shape,
+            #                                      self.initial_alpha,
+            #                                      device=self.device),
+            #                           requires_grad=True)
 
     def _build(self):
         """
@@ -120,7 +146,7 @@ class ImageIBA(nn.Module):
 
         # Smoothen and expand alpha on batch dimension
         lamb = self.sigmoid(alpha)
-        lamb = lamb.expand(g.shape[0], g.shape[1], -1, -1)
+        lamb = lamb.expand(g.shape[0], 1, -1)
         lamb = self.smooth(lamb) if self.smooth is not None else lamb
 
         # sample from random variable x
@@ -196,11 +222,11 @@ class ImageIBA(nn.Module):
         Returns:
             The heatmap of the same shape as the ``input_t``.
         """
-        assert input_t.shape[0] == 1, "We can only fit one sample a time"
-        batch = input_t.expand(batch_size, -1, -1, -1)
+        assert input_t.shape[1] == 1, "We can only fit one sample a time"
+        batch = batch = input_t.expand(-1, batch_size)
 
         # Reset from previous run or modifications
-        self._reset_alpha()
+        self._reset_alpha(input_t.shape[0])
         optimizer = torch.optim.Adam(lr=lr, params=[self.alpha])
 
         self._loss = []
@@ -222,8 +248,7 @@ class ImageIBA(nn.Module):
         with self.restrict_flow():
             for _ in opt_range:
                 optimizer.zero_grad()
-                masked_img = self.forward(batch)
-                model_loss = model_loss_fn(masked_img)
+                model_loss = model_loss_fn(batch)
                 # Taking the mean is equivalent of scaling the sum with 1/K
                 information_loss = self.capacity().mean()
                 if self.reverse_lambda:
@@ -238,6 +263,8 @@ class ImageIBA(nn.Module):
                 self._model_loss.append(model_loss.item())
                 self._information_loss.append(information_loss.item())
 
+        print(self._model_loss)
+        print(self._information_loss)
         return self._get_saliency(mode=mode, shape=input_t.shape[2:])
 
     def capacity(self):
@@ -246,13 +273,15 @@ class ImageIBA(nn.Module):
         over the redundant batch dimension.
         Shape is ``(self.channels, self.height, self.width)``
         """
-        return self._buffer_capacity.mean(dim=0)
+        return self._buffer_capacity.mean(dim=1)
 
     def _get_saliency(self, mode='saliency', shape=None):
         capacity_np = self.capacity().detach().cpu().numpy()
         if mode == "saliency":
             # In bits, summed over channels, scaled to input
-            return to_saliency_map(capacity_np, shape)
+            # print(np.around(capacity_np.sum(1), decimals=2))
+            print(capacity_np.sum(1))
+            return capacity_np.sum(1)
         elif mode == "capacity":
             # In bits, not summed, not scaled
             return capacity_np / float(np.log(2))

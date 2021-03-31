@@ -46,8 +46,9 @@ class Attributer:
                           **estimation_cfg)
 
     def train_iba(self, img, closure, attr_cfg):
-        if img.dim() == 3:
-            img = img.unsqueeze(0)
+        if img.dim() == 1:
+            img = img.unsqueeze(1)
+        self.classifier.train()
         iba_heatmap = self.iba.analyze(input_t=img,
                                        model_loss_fn=closure,
                                        **attr_cfg)
@@ -66,19 +67,23 @@ class Attributer:
 
     def train_img_iba(self, img_iba_cfg, img, gen_img_mask, closure, attr_cfg):
         img_iba = ImageIBA(img=img,
+                           context=self,
                            img_mask=gen_img_mask,
                            img_eps_mean=0.0,
                            img_eps_std=1.0,
                            device=self.device,
                            **img_iba_cfg)
-        img_iba_heatmap = img_iba.analyze(img.unsqueeze(0), closure, **attr_cfg)
+        img_iba_heatmap = img_iba.analyze(img.unsqueeze(1), closure, **attr_cfg)
         img_mask = img_iba.sigmoid(img_iba.alpha).detach().cpu().mean([0, 1]).numpy()
         return img_mask, img_iba_heatmap
 
     @staticmethod
     def get_closure(classifier, target, use_softmax, batch_size=None):
         if use_softmax:
-            closure = lambda x: -torch.log_softmax(classifier(x), 1)[:, target].mean()
+            bce_loss = torch.nn.BCEWithLogitsLoss()
+            # sentence length is part of model's input
+            closure = lambda x: bce_loss(classifier(x, torch.tensor([x.shape[0]]).expand(x.shape[1])), target)
+
         else:
             assert batch_size is not None
             # target is binary encoded and it is for a single sample
