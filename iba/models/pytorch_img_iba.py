@@ -93,6 +93,16 @@ class ImageIBA(nn.Module):
         else:
             self.smooth = None
 
+    def detach(self):
+        """ Remove the bottleneck to restore the original model """
+        if self._hook_handle is not None:
+            self._hook_handle.remove()
+            self._hook_handle = None
+        else:
+            raise ValueError(
+                "Cannot detach hock. Either you never attached or already detached."
+            )
+
     def forward(self, x):
         """
         You don't need to call this method manually.
