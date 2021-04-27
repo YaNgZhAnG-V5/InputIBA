@@ -42,7 +42,7 @@ class RNN(nn.Module):
         
         #pack sequence
         # lengths need to be on CPU!
-        packed_embedded = nn.utils.rnn.pack_padded_sequence(embedded, text_lengths.to('cpu'))
+        packed_embedded = nn.utils.rnn.pack_padded_sequence(embedded, text_lengths.to('cpu'), enforce_sorted=False)
         
         packed_output, _ = self.rnn_1(packed_embedded)
         packed_output, _ = self.rnn_2(packed_output)
@@ -66,6 +66,52 @@ class RNN(nn.Module):
         #hidden = [batch size, hid dim * num directions]
             
         return self.fc(hidden)
+
+    # returns the word embedding given text
+    # this function is only needed for evaluation of attribution method
+    def forward_embedding_only(self, text):
+        # text = [sent len, batch size]
+
+        embedded = self.embedding(text)
+
+        return embedded
+
+    # returns logit given word embedding
+    # this function is only needed for evaluation of attribution method
+    def forward_no_embedding(self, embedding, text_lengths):
+        # text = [sent len, batch size]
+
+        embedded = self.dropout(embedding)
+
+        # embedded = [sent len, batch size, emb dim]
+
+        # pack sequence
+        # lengths need to be on CPU!
+        packed_embedded = nn.utils.rnn.pack_padded_sequence(embedded, text_lengths.to('cpu'), enforce_sorted=False)
+
+        packed_output, _ = self.rnn_1(packed_embedded)
+        packed_output, _ = self.rnn_2(packed_output)
+        packed_output, (hidden, cell) = self.rnn_3(packed_output)
+
+        # unpack sequence
+        output, output_lengths = nn.utils.rnn.pad_packed_sequence(packed_output)
+
+        # output = [sent len, batch size, hid dim * num directions]
+        # output over padding tokens are zero tensors
+
+        # hidden = [num layers * num directions, batch size, hid dim]
+        # cell = [num layers * num directions, batch size, hid dim]
+
+        # concat the final forward (hidden[-2,:,:]) and backward (hidden[-1,:,:]) hidden layers
+        # and apply dropout
+
+        # hidden = self.dropout(torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1))
+        hidden = self.dropout(hidden[-1, :, :])
+
+        # hidden = [batch size, hid dim * num directions]
+
+        return self.fc(hidden)
+
 
 def build_classifiers(cfg):
     #TODO remove print

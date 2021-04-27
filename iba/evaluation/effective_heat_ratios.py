@@ -76,4 +76,4 @@ class EffectiveHeatRatios(BaseEvaluation):
 
     @staticmethod
     def integrate(ratios, quantiles):
-        return trapezoid(ratios, quantiles)
+        return trapz(ratios, quantiles)

@@ -79,7 +79,7 @@ class PixelPerturber(Perturber):
         self.current[:, r, c] = self.baseline[:, r, c]
 
     def get_current(self) -> torch.Tensor:
-        return self.current
+        return self.current.clone()
 
     def get_grid_shape(self) -> tuple:
         return self.current.shape
@@ -101,10 +101,23 @@ class GridPerturber(Perturber):
         self.current[:, slc[0], slc[1]] = self.baseline[:, slc[0], slc[1]]
 
     def get_current(self) -> torch.Tensor:
-        return self.current
+        return self.current.clone()
 
     def get_grid_shape(self) -> tuple:
         return self.view.tiles_r, self.view.tiles_c
 
     def get_tile_shape(self) -> tuple:
         return self.view.tile_h, self.view.tile_w
+
+
+class WordPerturber():
+
+    def __init__(self, inp: torch.Tensor, baseline: torch.Tensor):
+        self.current = inp.clone()
+        self.baseline = baseline
+
+    def perturb(self, ind: int):
+        self.current[ind, :] = self.baseline[ind, :]
+
+    def get_current(self) -> torch.Tensor:
+        return self.current.clone()
