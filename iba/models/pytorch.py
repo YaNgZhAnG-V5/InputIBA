@@ -480,10 +480,9 @@ class IBA(nn.Module):
             self.reset_estimate()
         for batch in dataloader:
             if isinstance(batch, tuple) or isinstance(batch, list):
-                #TODO rethink for nlp
-                # imgs = batch[0]
-                raise NotImplementedError
+                (label, text, text_lengths, fname) = batch
             else:
+                # if torchtext.legacy is used for dataset
                 text, text_lengths = batch.text
             if self.estimator.n_samples() > n_samples:
                 break

@@ -28,6 +28,7 @@ class ImageIBA(nn.Module):
         super().__init__()
         self.initial_alpha = initial_alpha
         self.alpha = None  # Initialized on first forward pass
+        self.lamb = None
         self.img_mask = img_mask
         self.img = img
         self.context = context
@@ -92,16 +93,6 @@ class ImageIBA(nn.Module):
                                                  shape[1]).to(self.device)
         else:
             self.smooth = None
-
-    def detach(self):
-        """ Remove the bottleneck to restore the original model """
-        if self._hook_handle is not None:
-            self._hook_handle.remove()
-            self._hook_handle = None
-        else:
-            raise ValueError(
-                "Cannot detach hock. Either you never attached or already detached."
-            )
 
     def forward(self, x):
         """
@@ -173,7 +164,7 @@ class ImageIBA(nn.Module):
                                              self.img_eps_mean,
                                              self.img_eps_std, lamb, self._mean,
                                              self._std)
-
+        self.lamb = lamb
         # apply mask on sampled x
         eps = x.data.new(x.size()).normal_()
         ε = self._std * eps + self._mean
@@ -273,8 +264,8 @@ class ImageIBA(nn.Module):
                 self._model_loss.append(model_loss.item())
                 self._information_loss.append(information_loss.item())
 
-        print(self._model_loss)
-        print(self._information_loss)
+        print("Model Loss: {}".format(self._model_loss))
+        print("Information Loss: {}".format(self._information_loss))
         return self._get_saliency(mode=mode, shape=input_t.shape[2:])
 
     def capacity(self):
@@ -289,8 +280,6 @@ class ImageIBA(nn.Module):
         capacity_np = self.capacity().detach().cpu().numpy()
         if mode == "saliency":
             # In bits, summed over channels, scaled to input
-            # print(np.around(capacity_np.sum(1), decimals=2))
-            print(capacity_np.sum(1))
             return capacity_np.sum(1)
         elif mode == "capacity":
             # In bits, not summed, not scaled

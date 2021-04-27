@@ -2,11 +2,11 @@ import torch
 import torch.nn.functional as F
 from .gan import WGAN_CP
 from .pytorch_img_iba import ImageIBA
-import matplotlib.pyplot as plt
+from IPython.core.display import display, HTML
+from PIL import Image
 import os.path as osp
 import mmcv
 import numpy as np
-from PIL import Image
 from .model_zoo import build_classifiers
 from .pytorch import IBA
 from copy import deepcopy
@@ -31,8 +31,11 @@ class Attributer:
         #     self.num_classes = num_classes
         self.use_softmax = use_softmax
         self.iba = IBA(context=self, **self.cfg['iba'])
-
+        self.text = None
         self.buffer = {}
+
+    def set_text(self, text):
+        self.text = text
 
     def clear_buffer(self):
         self.buffer.clear()
@@ -74,7 +77,7 @@ class Attributer:
                            device=self.device,
                            **img_iba_cfg)
         img_iba_heatmap = img_iba.analyze(img.unsqueeze(1), closure, **attr_cfg)
-        img_mask = img_iba.sigmoid(img_iba.alpha).detach().cpu().mean([0, 1]).numpy()
+        img_mask = img_iba.sigmoid(img_iba.alpha).detach().cpu().mean([1, 2]).numpy()
         return img_mask, img_iba_heatmap
 
     @staticmethod
@@ -114,64 +117,57 @@ class Attributer:
                                                        gen_img_mask, closure,
                                                        attr_cfg['img_iba'])
 
-        iba_capacity = self.iba.capacity().sum(0).clone().detach().cpu().numpy()
+        iba_capacity = self.iba.capacity().sum(1).clone().detach().cpu().numpy()
         gen_img_mask = gen_img_mask.cpu().mean([0, 1]).numpy()
+        #TODO gen_img_mask is not correctly returned for NLP model
         self.buffer.update(iba_heatmap=iba_heatmap,
                            img_iba_heatmap=img_iba_heatmap,
                            img_mask=img_mask,
                            gen_img_mask=gen_img_mask,
                            iba_capacity=iba_capacity)
 
-    def show_feat_mask(self, upscale=False, show=False, out_file=None):
+    def show_feat_mask(self, tokenizer=None, upscale=False, show=False, out_file=None):
         if not upscale:
             mask = self.buffer['iba_capacity']
         else:
             mask = self.buffer['iba_heatmap']
         mask = mask / mask.max()
-        self.show_mask(mask, show=show, out_file=out_file)
+        self.show_mask(self.text, mask, tokenizer, show=show, out_file=out_file)
 
     def show_gen_img_mask(self, show=False, out_file=None):
         mask = self.buffer['gen_img_mask']
         self.show_mask(mask, show=show, out_file=out_file)
 
-    def show_img_mask(self, show=False, out_file=None):
+    def show_img_mask(self, tokenizer=None, show=False, out_file='/content'):
         mask = self.buffer['img_mask']
-        self.show_mask(mask, show=show, out_file=out_file)
+        self.show_mask(self.text, mask, tokenizer, show=show, out_file=out_file)
 
     @staticmethod
-    def show_img(img,
-                 mean=(0.485, 0.456, 0.406),
-                 std=(0.229, 0.224, 0.225),
-                 show=False,
-                 out_file=None):
-        if isinstance(img, torch.Tensor):
-            assert img.max().item() < 1
-            mean = torch.tensor(mean).to(img)
-            std = torch.tensor(std).to(img)
-        else:
-            assert img.max() < 1
-            mean = np.array(mean)
-            std = np.array(std)
-        img = img * std + mean
-        if isinstance(img, torch.Tensor):
-            img = img.cpu().numpy()
-        Attributer.show_mask(img, show=show, out_file=out_file)
+    def show_img(text,
+            tokenizer,
+            show=False,
+            out_file=None):
+        zero_mask = torch.zeros((len(text),)).int().detach().cpu().numpy()
+        Attributer.show_mask(text, zero_mask, tokenizer, show=show, out_file=out_file)
 
     @staticmethod
-    def show_mask(mask, show=False, out_file=None):
-        if mask.dtype in (float, np.float32, np.float16, np.float128):
-            assert mask.max() <= 1.0
-            mask = (mask * 255).astype(np.uint8)
-        plt.imshow(mask)
-        plt.axis('off')
+    def show_mask(text, mask, tokenizer, show=False, out_file=None):
+      if show:
+        def highlighter(word, word_mask):
+            colors = ["#ffffff", "#ffcccc", "#ff9999", '#ff6666', '#ff3333', '#ff0000']
+            if int(word_mask*(len(colors)-1)) < len(colors):
+                color =  colors[int(word_mask*(len(colors)-1))]
+                word = '<span style="background-color:' +color+ '">' +word+ '</span>'
+            return word
 
-        if out_file is not None:
-            dir_name = osp.abspath(osp.dirname(out_file))
-            mmcv.mkdir_or_exist(dir_name)
-            mask = Image.fromarray(mask, mode='L')
-            mask.save(out_file + '.png')
-            plt.savefig(out_file + '.JPEG', bbox_inches='tight', pad_inches=0)
-            if not show:
-                plt.close()
-        if show:
-            plt.show()
+        highlighted_text = ' '.join([highlighter(word, word_mask) for (word, word_mask) in zip(tokenizer(text), mask)])
+
+        display(HTML(highlighted_text))
+
+      if out_file is not None:
+          mask = (mask * 255).astype(np.uint8)
+          mask = np.resize(np.expand_dims(mask, 0), (50,mask.shape[0]))
+          dir_name = osp.abspath(osp.dirname(out_file))
+          mmcv.mkdir_or_exist(dir_name)
+          mask = Image.fromarray(mask, mode='L')
+          mask.save(out_file + '.png')
