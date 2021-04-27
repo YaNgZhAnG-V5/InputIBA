@@ -136,7 +136,7 @@ def build_classifiers(cfg):
                 PAD_IDX)
 
     # select a model to analyse
-    model.load_state_dict(torch.load(os.path.join(os.getcwd(), '../InformationBottleneck/rnn-model.pt')))
+    model.load_state_dict(torch.load(os.path.join(os.getcwd(), '../rnn-model.pt')))
     return model
 
 
