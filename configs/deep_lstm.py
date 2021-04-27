@@ -1,7 +1,7 @@
 _base_ = ['_base_/imagenet.py']
 
 attributer = dict(
-    layer='rnn_2',
+    layer='rnn_1',
     classifier=dict(
         type='vgg16',
         pretrained=True),
@@ -11,19 +11,19 @@ attributer = dict(
         initial_alpha=5.0),
     img_iba=dict(
         initial_alpha=5.0,
-        sigma=1.0,
+        sigma=0.0,
     )
 )
 
 estimation_cfg = dict(
-    n_samples=500,
+    n_samples=1000,
     progbar=True,
 )
 
 attribution_cfg = dict(
     iba=dict(
         batch_size=10,
-        beta=0.1),
+        beta=0.5),
     gan=dict(
         dataset_size=200,
         sub_dataset_size=20,
@@ -33,9 +33,9 @@ attribution_cfg = dict(
         epochs=20,
         critic_iter=5),
     img_iba=dict(
-        beta=20.0,
-        opt_steps=60,
-        lr=1.0,
+        beta=0.01,
+        opt_steps=30,
+        lr=0.5,
         batch_size=10),
     feat_mask=dict(
         upscale=True,
