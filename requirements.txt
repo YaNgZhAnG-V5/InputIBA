@@ -3,4 +3,5 @@ torch
 mmcv
 tqdm
 torchvision
+torchtext
 opencv-python

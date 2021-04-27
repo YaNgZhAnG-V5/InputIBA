@@ -1,4 +1,5 @@
 from torchvision import models
+import os
 import torch
 from torch import nn
 
@@ -135,7 +136,7 @@ def build_classifiers(cfg):
                 PAD_IDX)
 
     # select a model to analyse
-    model.load_state_dict(torch.load('/content/drive/MyDrive/InformationBottleneck/rnn-model.pt'))
+    model.load_state_dict(torch.load(os.path.join(os.getcwd(), '../InformationBottleneck/rnn-model.pt')))
     return model
 
 
