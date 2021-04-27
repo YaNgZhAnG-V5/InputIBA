@@ -1,11 +1,14 @@
 import torch
 from torch.utils.data import DataLoader
+import sys
 import os
-from tqdm import tqdm_notebook
+from tqdm import tqdm
 import numpy as np
 import mmcv
 import argparse
 
+sys.path.insert(0, "..")
+import iba
 from iba.models import Attributer
 
 # define IMDB dataset to return ID
@@ -113,7 +116,9 @@ attibuter.estimate(dataloader, cfg.estimation_cfg)
 # get masks
 work_dir = os.path.join(os.getcwd(),'../NLP_masks')
 train_iter = IMDB(split='test', cls='pos')
-for label, text, filename in tqdm_notebook(train_iter):
+for count, (label, text, filename) in tqdm(enumerate(train_iter)):
+    if count >=2000:
+        break
     filename = filename.split('/')[-1].split('.')[0]
     feat_mask_file = os.path.join(work_dir, 'feat_masks', filename)
     img_mask_file = os.path.join(work_dir, 'img_masks', filename)
