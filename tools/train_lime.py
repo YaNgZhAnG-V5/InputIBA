@@ -152,3 +152,6 @@ def generate_lime_masks():
             mmcv.mkdir_or_exist(dir_name)
             mask = Image.fromarray(mask, mode='L')
             mask.save(mask_file + '.png')
+
+if __name__ == '__main__':
+    generate_lime_masks()
