@@ -12,6 +12,89 @@ from iba.utils import get_valid_set
 import cv2
 from tqdm import tqdm
 
+# define IMDB dataset to return ID
+
+import torchtext
+from torchtext.utils import download_from_url, extract_archive
+from torchtext.data.datasets_utils import _RawTextIterableDataset
+from torchtext.data.datasets_utils import _wrap_split_argument
+from torchtext.data.datasets_utils import _add_docstring_header
+import io
+
+URL = 'http://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz'
+
+MD5 = '7c2ac02c03563afcf9b574c7e56c153a'
+
+NUM_LINES = {
+    'train': 25000,
+    'test': 25000,
+}
+
+_PATH = 'aclImdb_v1.tar.gz'
+
+DATASET_NAME = "IMDB"
+
+
+@_add_docstring_header(num_lines=NUM_LINES, num_classes=2)
+@_wrap_split_argument(('train', 'test'))
+def IMDB(root, split):
+    def generate_imdb_data(key, extracted_files):
+        for fname in extracted_files:
+            if 'urls' in fname:
+                continue
+            elif key in fname and ('pos' in fname or 'neg' in fname):
+                with io.open(fname, encoding="utf8") as f:
+                    label = 'pos' if 'pos' in fname else 'neg'
+                    yield label, f.read(), fname
+
+    dataset_tar = download_from_url(URL, root=root,
+                                    hash_value=MD5, hash_type='md5')
+    extracted_files = extract_archive(dataset_tar)
+    iterator = generate_imdb_data(split, extracted_files)
+    return _RawTextIterableDataset(DATASET_NAME, NUM_LINES[split], iterator)
+
+
+from torch.nn.utils.rnn import pad_sequence
+from torchtext.data.utils import get_tokenizer
+from collections import Counter
+from torchtext.vocab import Vocab
+
+vec = torchtext.vocab.GloVe(name='6B', dim=100)
+tokenizer = get_tokenizer('basic_english')
+train_iter = torchtext.datasets.IMDB(split='train')
+
+counter = Counter()
+for (label, line) in train_iter:
+    counter.update(tokenizer(line))
+vocab = Vocab(counter, max_size=25000)
+vocab.load_vectors(vec)
+
+
+def text_pipeline(x):
+    return [vocab[token] for token in tokenizer(x)]
+
+
+def label_pipeline(label):
+    return 0 if label == 'neg' else 1
+
+
+def collate_batch(device):
+    def collate_batch_fn(batch):
+        label_list, text_list, text_length_list, fname_list = [], [], [], []
+        for (_label, _text, _fname) in batch:
+            label_list.append(label_pipeline(_label))
+            processed_text = torch.tensor(text_pipeline(_text), dtype=torch.int64)
+            text_list.append(processed_text)
+            text_length_list.append(torch.tensor([processed_text.shape[0]]))
+            fname_list.append(int(_fname.split('/')[-1].split('.')[0].replace('_', '')))
+        label_list = torch.tensor(label_list, dtype=torch.int64)
+        padded_text_list = pad_sequence(text_list)
+        text_length_list = torch.cat(text_length_list)
+        fname_list = torch.tensor(fname_list, dtype=torch.int64)
+        return label_list.to(device), padded_text_list.to(device), text_length_list.to(device), fname_list.to(device)
+
+    return collate_batch_fn
+
 
 def parse_args():
     parser = ArgumentParser('Insertion Deletion evaluation')
@@ -64,21 +147,12 @@ def insertion_deletion(cfg,
                        sigma=5.0,
                        device='cuda:0'):
     mmcv.mkdir_or_exist(work_dir)
-    val_set = build_dataset(cfg.data['val'])
 
-    val_set = get_valid_set(val_set,
-                            scores_file=scores_file,
-                            scores_threshold=scores_threshold,
-                            num_samples=num_samples)
+    classifier = build_classifiers().to(device)
+    insertion_deletion_eval = InsertionDeletion(classifier)
 
-    val_loader_cfg = deepcopy(cfg.data['data_loader'])
-    val_loader_cfg.update({'shuffle': False})
-    val_loader = DataLoader(val_set, **val_loader_cfg)
-
-    classifer = build_classifiers(cfg.attributer['classifier']).to(device)
-    evaluator = InsertionDeletion(classifer,
-                                  pixel_batch_size=pixel_batch_size,
-                                  sigma=sigma)
+    val_iter = IMDB(split='test', cls='pos')
+    val_loader = DataLoader(val_iter, batch_size=8, shuffle=False, collate_fn=collate_batch(device))
 
     results = {}
     try:
@@ -87,14 +161,16 @@ def insertion_deletion(cfg,
             targets = batch['target']
             img_names = batch['img_name']
 
-            for img, target, img_name in zip(imgs, targets, img_names):
-                img = img.to(device)
+            for text, target, img_name in zip(imgs, targets, img_names):
+                text = text.to(device)
                 target = target.item()
                 heatmap = cv2.imread(osp.join(heatmap_dir, img_name + '.png'),
                                      cv2.IMREAD_UNCHANGED)
-                heatmap = torch.from_numpy(heatmap).to(img) / 255.0
+                heatmap = torch.from_numpy(heatmap).to(text) / 255.0
 
-                res_single = evaluator.evaluate(heatmap, img, target)
+                res_single = insertion_deletion_eval.evaluate(heatmap,
+                                                              text,
+                                                              target)
                 ins_auc = res_single['ins_auc']
                 del_auc = res_single['del_auc']
 
