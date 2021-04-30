@@ -161,30 +161,27 @@ def insertion_deletion(cfg,
     insertion_deletion_eval = InsertionDeletion(classifier)
 
     val_iter = IMDB(split='test', cls='pos')
-    val_loader = DataLoader(val_iter, batch_size=8, shuffle=False, collate_fn=collate_batch(device))
 
     results = {}
     count = 0
     try:
-        for batch in tqdm(val_loader, total=len(val_loader)):
-            imgs, targets, img_names = batch
+        for batch in tqdm(val_iter, total=2000):
+            target, text, img_name = batch
+            target = label_pipeline(target)
+            count += 1
+            text = torch.tensor(text_pipeline(text)).to(device)
+            heatmap = cv2.imread(osp.join(heatmap_dir, img_name + '.png'),
+                                 cv2.IMREAD_UNCHANGED)
+            heatmap = torch.from_numpy(heatmap).to(text) / 255.0
 
-            for text, target, img_name in zip(imgs, targets, img_names):
-                count += 1
-                text = text.to(device)
-                target = target.item()
-                heatmap = cv2.imread(osp.join(heatmap_dir, img_name + '.png'),
-                                     cv2.IMREAD_UNCHANGED)
-                heatmap = torch.from_numpy(heatmap).to(text) / 255.0
+            res_single = insertion_deletion_eval.evaluate(heatmap,
+                                                          text,
+                                                          target)
+            ins_auc = res_single['ins_auc']
+            del_auc = res_single['del_auc']
 
-                res_single = insertion_deletion_eval.evaluate(heatmap,
-                                                              text,
-                                                              target)
-                ins_auc = res_single['ins_auc']
-                del_auc = res_single['del_auc']
-
-                results.update(
-                    {img_name: dict(ins_auc=ins_auc, del_auc=del_auc)})
+            results.update(
+                {img_name: dict(ins_auc=ins_auc, del_auc=del_auc)})
             if count>2000:
                 break
     except KeyboardInterrupt:
