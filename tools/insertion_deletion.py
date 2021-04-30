@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 from copy import deepcopy
 import mmcv
 from mmcv.runner.utils import set_random_seed
-from iba.models import build_classifiers
+from iba.models.model_zoo import build_classifiers
 from iba.datasets import build_dataset
 from iba.evaluation import InsertionDeletion
 from iba.utils import get_valid_set
@@ -155,13 +155,13 @@ def insertion_deletion(cfg,
     val_loader = DataLoader(val_iter, batch_size=8, shuffle=False, collate_fn=collate_batch(device))
 
     results = {}
+    count = 0
     try:
         for batch in tqdm(val_loader, total=len(val_loader)):
-            imgs = batch['img']
-            targets = batch['target']
-            img_names = batch['img_name']
+            imgs, targets, img_names = batch
 
             for text, target, img_name in zip(imgs, targets, img_names):
+                count += 1
                 text = text.to(device)
                 target = target.item()
                 heatmap = cv2.imread(osp.join(heatmap_dir, img_name + '.png'),
@@ -176,6 +176,8 @@ def insertion_deletion(cfg,
 
                 results.update(
                     {img_name: dict(ins_auc=ins_auc, del_auc=del_auc)})
+            if count>2000:
+                break
     except KeyboardInterrupt:
         mmcv.dump(results, file=osp.join(work_dir, file_name))
         return
