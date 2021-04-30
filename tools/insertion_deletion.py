@@ -37,15 +37,24 @@ DATASET_NAME = "IMDB"
 
 @_add_docstring_header(num_lines=NUM_LINES, num_classes=2)
 @_wrap_split_argument(('train', 'test'))
-def IMDB(root, split):
+def IMDB(root, split, cls=None):
     def generate_imdb_data(key, extracted_files):
         for fname in extracted_files:
             if 'urls' in fname:
                 continue
-            elif key in fname and ('pos' in fname or 'neg' in fname):
-                with io.open(fname, encoding="utf8") as f:
-                    label = 'pos' if 'pos' in fname else 'neg'
-                    yield label, f.read(), fname
+            elif key in fname:
+                if cls is None and ('pos' in fname or 'neg' in fname):
+                    with io.open(fname, encoding="utf8") as f:
+                        label = 'pos' if 'pos' in fname else 'neg'
+                        yield label, f.read(), fname
+                elif cls == 'pos' and ('pos' in fname):
+                    with io.open(fname, encoding="utf8") as f:
+                        label = 'pos'
+                        yield label, f.read(), fname
+                elif cls == 'neg' and ('neg' in fname):
+                    with io.open(fname, encoding="utf8") as f:
+                        label = 'neg'
+                        yield label, f.read(), fname
 
     dataset_tar = download_from_url(URL, root=root,
                                     hash_value=MD5, hash_type='md5')
