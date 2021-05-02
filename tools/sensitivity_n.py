@@ -106,6 +106,7 @@ def sensitivity_n(cfg,
             for batch in val_iter:
                 count += 1
                 target, text, img_name = batch
+                img_name = img_name.split('/')[-1].split('.')[0]
                 text = torch.tensor(text_pipeline(text)).to(device)
                 target = label_pipeline(target)
                 heatmap = cv2.imread(osp.join(heatmap_dir, img_name + '.png'),
@@ -120,7 +121,7 @@ def sensitivity_n(cfg,
                 corr = res_single['correlation'][1, 0]
                 corr_all.append(corr)
                 pbar.update(1)
-                if count > 2000:
+                if count >= 2000:
                     break
             results.update({int(n): np.mean(corr_all)})
     except KeyboardInterrupt:
