@@ -88,16 +88,12 @@ def sensitivity_n(cfg,
     results = {}
 
     try:
-        n_list = np.logspace(0, log_n_max, int(log_n_max / log_n_ticks), base=10.0, dtype=int)
+        n_list = np.linspace(0, 0.5, 1, dtype=int)
         # to eliminate the duplicate elements caused by rounding
         n_list = np.unique(n_list)
         logger.info(f"n_list: [{', '.join(map(str,n_list))}]")
         pbar = tqdm(total=len(n_list) * len(val_loader))
         for n in n_list:
-            evaluator = SensitivityN(classifier,
-                                     img_size=(h, w),
-                                     n=n,
-                                     num_masks=num_masks)
 
             corr_all = []
             for batch in val_loader:
@@ -112,6 +108,10 @@ def sensitivity_n(cfg,
                                          cv2.IMREAD_UNCHANGED)
                     heatmap = torch.from_numpy(heatmap).to(img) / 255.0
 
+                    evaluator = SensitivityN(classifier,
+                                             img.shape[0],
+                                             n=int(img.shape[0] * n),
+                                             num_masks=num_masks)
                     res_single = evaluator.evaluate(heatmap, img, target, calculate_corr=True)
                     corr = res_single['correlation'][1, 0]
                     corr_all.append(corr)
