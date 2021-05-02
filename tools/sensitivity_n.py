@@ -12,6 +12,12 @@ import cv2
 from tqdm import tqdm
 import numpy as np
 from iba.utils import get_valid_set
+import torchtext
+from torchtext.data.utils import get_tokenizer
+from collections import Counter
+from torchtext.vocab import Vocab
+
+from iba.datasets.imdb import IMDB
 
 
 def parse_args():
@@ -60,31 +66,31 @@ def sensitivity_n(cfg,
                   file_name,
                   scores_file=None,
                   scores_threshold=0.6,
-                  log_n_max=4.5,
-                  log_n_ticks=0.1,
                   num_masks=100,
                   num_samples=0,
                   device='cuda:0'):
     logger = mmcv.get_logger('iba')
     mmcv.mkdir_or_exist(work_dir)
-    val_set = build_dataset(cfg.data['val'])
-    # check if n is valid
-    img_h, img_w = val_set[0]['img'].shape[-2:]
-    max_allowed_n = np.log(img_h * img_w)
-    assert log_n_max < max_allowed_n, f"log_n_max must smaller than {max_allowed_n}, but got {log_n_max}"
 
-    val_set = get_valid_set(val_set,
-                            scores_file=scores_file,
-                            scores_threshold=scores_threshold,
-                            num_samples=num_samples)
+    val_iter = IMDB(split='test', cls='pos')
+    classifier = build_classifiers().to(device)
 
-    val_loader_cfg = deepcopy(cfg.data['data_loader'])
-    val_loader_cfg.update({'shuffle': False})
-    val_loader = DataLoader(val_set, **val_loader_cfg)
-    classifier = build_classifiers(cfg.attributer['classifier']).to(device)
+    vec = torchtext.vocab.GloVe(name='6B', dim=100)
+    tokenizer = get_tokenizer('basic_english')
+    train_iter = torchtext.datasets.IMDB(split='train')
 
-    sample = val_set[0]['img']
-    h, w = sample.shape[1:]
+    counter = Counter()
+    for (label, line) in train_iter:
+        counter.update(tokenizer(line))
+    vocab = Vocab(counter, max_size=25000)
+    vocab.load_vectors(vec)
+
+    def text_pipeline(x):
+        return [vocab[token] for token in tokenizer(x)]
+
+    def label_pipeline(label):
+        return 0 if label == 'neg' else 1
+
     results = {}
 
     try:
@@ -92,30 +98,30 @@ def sensitivity_n(cfg,
         # to eliminate the duplicate elements caused by rounding
         n_list = np.unique(n_list)
         logger.info(f"n_list: [{', '.join(map(str,n_list))}]")
-        pbar = tqdm(total=len(n_list) * len(val_loader))
+        pbar = tqdm(total=len(n_list) * 2000)
         for n in n_list:
+            count = 0
 
             corr_all = []
-            for batch in val_loader:
-                imgs = batch['img']
-                targets = batch['target']
-                img_names = batch['img_name']
+            for batch in val_iter:
+                count += 1
+                target, text, img_name = batch
+                text = torch.tensor(text_pipeline(text)).to(device)
+                target = label_pipeline(target)
+                heatmap = cv2.imread(osp.join(heatmap_dir, img_name + '.png'),
+                                     cv2.IMREAD_UNCHANGED)
+                heatmap = torch.from_numpy(heatmap).to(text) / 255.0
 
-                for img, target, img_name in zip(imgs, targets, img_names):
-                    img = img.to(device)
-                    target = target.item()
-                    heatmap = cv2.imread(osp.join(heatmap_dir, img_name + '.png'),
-                                         cv2.IMREAD_UNCHANGED)
-                    heatmap = torch.from_numpy(heatmap).to(img) / 255.0
-
-                    evaluator = SensitivityN(classifier,
-                                             img.shape[0],
-                                             n=int(img.shape[0] * n),
-                                             num_masks=num_masks)
-                    res_single = evaluator.evaluate(heatmap, img, target, calculate_corr=True)
-                    corr = res_single['correlation'][1, 0]
-                    corr_all.append(corr)
+                evaluator = SensitivityN(classifier,
+                                         text.shape[0],
+                                         n=int(text.shape[0] * n),
+                                         num_masks=num_masks)
+                res_single = evaluator.evaluate(heatmap, text, target, calculate_corr=True)
+                corr = res_single['correlation'][1, 0]
+                corr_all.append(corr)
                 pbar.update(1)
+                if count > 2000:
+                    break
             results.update({int(n): np.mean(corr_all)})
     except KeyboardInterrupt:
         mmcv.dump(results, file=osp.join(work_dir, file_name))
@@ -132,8 +138,6 @@ def main():
                   file_name=args.file_name,
                   scores_file=args.scores_file,
                   scores_threshold=args.scores_threshold,
-                  log_n_max=args.log_n_max,
-                  log_n_ticks=args.log_n_ticks,
                   num_masks=args.num_masks,
                   num_samples=args.num_samples,
                   device=f'cuda:{args.gpu_id}')
