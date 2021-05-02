@@ -167,6 +167,7 @@ def insertion_deletion(cfg,
     try:
         for batch in tqdm(val_iter, total=2000):
             target, text, img_name = batch
+            img_name = img_name.split('/')[-1].split('.')[0]
             target = label_pipeline(target)
             count += 1
             text = torch.tensor(text_pipeline(text)).to(device)
@@ -182,7 +183,7 @@ def insertion_deletion(cfg,
 
             results.update(
                 {img_name: dict(ins_auc=ins_auc, del_auc=del_auc)})
-            if count>2000:
+            if count>=2000:
                 break
     except KeyboardInterrupt:
         mmcv.dump(results, file=osp.join(work_dir, file_name))
