@@ -114,7 +114,7 @@ class RNN(nn.Module):
         return self.fc(hidden)
 
 
-def build_classifiers(cfg):
+def build_classifiers():
     #TODO remove print
     print("Load multi-layer LSTM")
     INPUT_DIM = 25002
