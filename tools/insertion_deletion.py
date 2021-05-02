@@ -63,7 +63,6 @@ def IMDB(root, split, cls=None):
     return _RawTextIterableDataset(DATASET_NAME, NUM_LINES[split], iterator)
 
 
-from torch.nn.utils.rnn import pad_sequence
 from torchtext.data.utils import get_tokenizer
 from collections import Counter
 from torchtext.vocab import Vocab
@@ -85,24 +84,6 @@ def text_pipeline(x):
 
 def label_pipeline(label):
     return 0 if label == 'neg' else 1
-
-
-def collate_batch(device):
-    def collate_batch_fn(batch):
-        label_list, text_list, text_length_list, fname_list = [], [], [], []
-        for (_label, _text, _fname) in batch:
-            label_list.append(label_pipeline(_label))
-            processed_text = torch.tensor(text_pipeline(_text), dtype=torch.int64)
-            text_list.append(processed_text)
-            text_length_list.append(torch.tensor([processed_text.shape[0]]))
-            fname_list.append(int(_fname.split('/')[-1].split('.')[0].replace('_', '')))
-        label_list = torch.tensor(label_list, dtype=torch.int64)
-        padded_text_list = pad_sequence(text_list)
-        text_length_list = torch.cat(text_length_list)
-        fname_list = torch.tensor(fname_list, dtype=torch.int64)
-        return label_list.to(device), padded_text_list.to(device), text_length_list.to(device), fname_list.to(device)
-
-    return collate_batch_fn
 
 
 def parse_args():
