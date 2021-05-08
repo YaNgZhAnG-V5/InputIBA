@@ -114,10 +114,11 @@ attibuter = Attributer(cfg.attributer, device=dev)
 attibuter.estimate(dataloader, cfg.estimation_cfg)
 
 # get masks
-work_dir = os.path.join(os.getcwd(),'../NLP_masks')
+cfg.attribution_cfg.img_iba.beta = 0.25 
+work_dir = os.path.join(os.getcwd(),'../4_layer/NLP_masks_0_25_rnn4')
 train_iter = IMDB(split='test', cls='pos')
 for count, (label, text, filename) in tqdm(enumerate(train_iter)):
-    if count >=2000:
+    if count >=100:
         break
     filename = filename.split('/')[-1].split('.')[0]
     feat_mask_file = os.path.join(work_dir, 'feat_masks', filename)
