@@ -114,22 +114,25 @@ attibuter = Attributer(cfg.attributer, device=dev)
 attibuter.estimate(dataloader, cfg.estimation_cfg)
 
 # get masks
-cfg.attribution_cfg.img_iba.beta = 0.25 
-work_dir = os.path.join(os.getcwd(),'../4_layer/NLP_masks_0_25_rnn4')
-train_iter = IMDB(split='test', cls='pos')
-for count, (label, text, filename) in tqdm(enumerate(train_iter)):
-    if count >=100:
-        break
-    filename = filename.split('/')[-1].split('.')[0]
-    feat_mask_file = os.path.join(work_dir, 'feat_masks', filename)
-    img_mask_file = os.path.join(work_dir, 'img_masks', filename)
-    if not (os.path.isfile(feat_mask_file + '.png') and os.path.isfile(img_mask_file + '.png')):
-        img = torch.tensor(text_pipeline(text))
-        target = torch.tensor([label_pipeline(label)]).double().expand(10, -1)
-        attibuter.set_text(text)
-        attibuter.make_attribution(img.to(dev),
-                                   target.to(dev),
-                                   attribution_cfg=cfg.attribution_cfg)
-        attibuter.show_feat_mask(**cfg.attribution_cfg.get('feat_mask', {}), tokenizer=tokenizer,
-                                 out_file=feat_mask_file)
-        attibuter.show_img_mask(**cfg.attribution_cfg.get('img_mask', {}), tokenizer=tokenizer, out_file=img_mask_file)
+beta_list = [0.01, 0.1, 0.2, 0.25, 0.5, 0.7, 1, 5, 10]
+for beta in beta_list:
+    cfg.attribution_cfg.img_iba.beta = beta
+    filename = 'NLP_masks_' + str(beta) + '_rnn4'
+    work_dir = os.path.join(os.getcwd(), '../4_layer', filename)
+    train_iter = IMDB(split='test', cls='pos')
+    for count, (label, text, filename) in tqdm(enumerate(train_iter)):
+        if count >=100:
+            break
+        filename = filename.split('/')[-1].split('.')[0]
+        feat_mask_file = os.path.join(work_dir, 'feat_masks', filename)
+        img_mask_file = os.path.join(work_dir, 'img_masks', filename)
+        if not (os.path.isfile(feat_mask_file + '.png') and os.path.isfile(img_mask_file + '.png')):
+            img = torch.tensor(text_pipeline(text))
+            target = torch.tensor([label_pipeline(label)]).double().expand(10, -1)
+            attibuter.set_text(text)
+            attibuter.make_attribution(img.to(dev),
+                                       target.to(dev),
+                                       attribution_cfg=cfg.attribution_cfg)
+            attibuter.show_feat_mask(**cfg.attribution_cfg.get('feat_mask', {}), tokenizer=tokenizer,
+                                     out_file=feat_mask_file)
+            attibuter.show_img_mask(**cfg.attribution_cfg.get('img_mask', {}), tokenizer=tokenizer, out_file=img_mask_file)
