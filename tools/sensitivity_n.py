@@ -72,7 +72,6 @@ def sensitivity_n(cfg,
     logger = mmcv.get_logger('iba')
     mmcv.mkdir_or_exist(work_dir)
 
-    val_iter = IMDB(split='test', cls='pos')
     classifier = build_classifiers().to(device)
 
     vec = torchtext.vocab.GloVe(name='6B', dim=100)
@@ -94,13 +93,14 @@ def sensitivity_n(cfg,
     results = {}
 
     try:
-        n_list = np.linspace(0, 0.5, 1, dtype=int)
+        n_list = np.linspace(0.1, 1, num=10)
         # to eliminate the duplicate elements caused by rounding
         n_list = np.unique(n_list)
         logger.info(f"n_list: [{', '.join(map(str,n_list))}]")
         pbar = tqdm(total=len(n_list) * 2000)
         for n in n_list:
             count = 0
+            val_iter = IMDB(split='test', cls='pos') 
 
             corr_all = []
             for batch in val_iter:
@@ -121,9 +121,9 @@ def sensitivity_n(cfg,
                 corr = res_single['correlation'][1, 0]
                 corr_all.append(corr)
                 pbar.update(1)
-                if count >= 2000:
+                if count >= 100:
                     break
-            results.update({int(n): np.mean(corr_all)})
+            results.update({n: np.mean(corr_all)})
     except KeyboardInterrupt:
         mmcv.dump(results, file=osp.join(work_dir, file_name))
     mmcv.dump(results, file=osp.join(work_dir, file_name))
