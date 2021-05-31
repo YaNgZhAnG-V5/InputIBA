@@ -17,7 +17,7 @@ class Attributer:
     def __init__(self, cfg: dict, device='cuda:0'):
         self.cfg = deepcopy(cfg)
         self.device = device
-        self.classifier = build_classifiers(self.cfg['classifier']).to(
+        self.classifier = build_classifiers().to(
             self.device)
         self.classifier.eval()
         for p in self.classifier.parameters():

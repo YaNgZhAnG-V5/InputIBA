@@ -118,7 +118,7 @@ def normalize_saliency(exp):
 
 # get masks
 def generate_lime_masks():
-    work_dir = os.path.join(os.getcwd(),'../NLP_masks_lime')
+    work_dir = os.path.join(os.getcwd(),'../4_layer/NLP_masks_lime')
     tokenizer = get_tokenizer('basic_english')
     train_iter = IMDB(split='test', cls='pos')
     model = iba.models.model_zoo.build_classifiers().eval()

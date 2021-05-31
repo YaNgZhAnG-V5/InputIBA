@@ -49,12 +49,12 @@ class InsertionDeletion(BaseEvaluation):
         # apply deletion game
         deletion_perturber = WordPerturber(text_embedding, torch.zeros_like(text_embedding))
         deletion_scores = self._procedure_perturb(deletion_perturber,
-                                                  num_pixels, indices, target)
+                                                  int(num_pixels*0.4), indices, target)
 
         # apply insertion game
         insertion_perturber = WordPerturber(torch.zeros_like(text_embedding), text_embedding)
         insertion_scores = self._procedure_perturb(insertion_perturber,
-                                                   num_pixels, indices, target)
+                                                   int(num_pixels*0.4), indices, target)
 
         # calculate AUC
         insertion_auc = trapezoid(insertion_scores,

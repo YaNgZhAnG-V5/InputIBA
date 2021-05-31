@@ -25,6 +25,11 @@ class RNN(nn.Module):
                           hidden_dim, 
                           num_layers=n_layers, 
                           bidirectional=bidirectional, 
+                          dropout=dropout)                        
+        self.rnn_4 = nn.LSTM(hidden_dim, 
+                          hidden_dim, 
+                          num_layers=n_layers, 
+                          bidirectional=bidirectional, 
                           dropout=dropout)
                         
         
@@ -47,7 +52,8 @@ class RNN(nn.Module):
         
         packed_output, _ = self.rnn_1(packed_embedded)
         packed_output, _ = self.rnn_2(packed_output)
-        packed_output, (hidden, cell) = self.rnn_3(packed_output)
+        packed_output, _ = self.rnn_3(packed_output)
+        packed_output, (hidden, cell) = self.rnn_4(packed_output)
         
         #unpack sequence
         output, output_lengths = nn.utils.rnn.pad_packed_sequence(packed_output)
@@ -92,7 +98,8 @@ class RNN(nn.Module):
 
         packed_output, _ = self.rnn_1(packed_embedded)
         packed_output, _ = self.rnn_2(packed_output)
-        packed_output, (hidden, cell) = self.rnn_3(packed_output)
+        packed_output, _ = self.rnn_3(packed_output)
+        packed_output, (hidden, cell) = self.rnn_4(packed_output)
 
         # unpack sequence
         output, output_lengths = nn.utils.rnn.pad_packed_sequence(packed_output)

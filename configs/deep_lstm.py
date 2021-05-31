@@ -1,7 +1,7 @@
 _base_ = ['_base_/imagenet.py']
 
 attributer = dict(
-    layer='rnn_1',
+    layer='rnn_4',
     classifier=dict(
         type='vgg16',
         pretrained=True),
@@ -33,7 +33,7 @@ attribution_cfg = dict(
         epochs=20,
         critic_iter=5),
     img_iba=dict(
-        beta=0.01,
+        beta=0.1,
         opt_steps=30,
         lr=0.5,
         batch_size=10),
