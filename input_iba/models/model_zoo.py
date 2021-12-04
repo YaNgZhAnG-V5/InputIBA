@@ -21,6 +21,8 @@ def build_classifiers(cfg, default_args=None):
         return build_torchvision_classifiers(cfg)
     elif source == 'timm':
         return build_timm_classifiers(cfg)
+    elif source == 'pkl':
+        return build_pkl_model(cfg)
     else:
         return build_from_cfg(cfg, MODELS, default_args=default_args)
 
@@ -50,6 +52,14 @@ def build_timm_classifiers(cfg):
     cfg = deepcopy(cfg)
     model_name = cfg.pop('type')
     return timm.create_model(model_name, **cfg)
+
+
+def build_pkl_model(cfg):
+    model_path = cfg.pop('path')
+    saved_model = torch.load(model_path, map_location='cuda:0')
+    model = saved_model['model'].module
+    del saved_model
+    return model
 
 
 def get_module(model, module):
