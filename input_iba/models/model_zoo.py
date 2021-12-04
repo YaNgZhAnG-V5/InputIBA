@@ -13,7 +13,7 @@ def build_classifiers(cfg, default_args=None):
         "('custom', 'torchvision','timm')"
 
     source = cfg.pop('source')
-    assert source in ('torchvision', 'custom', 'timm', 'nlp'), \
+    assert source in ('torchvision', 'custom', 'timm', 'nlp', 'pkl'), \
         f"source should be on of ('custom', 'torchvision', 'timm'), " \
         f"but got {source}"
 

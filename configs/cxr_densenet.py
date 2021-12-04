@@ -2,7 +2,7 @@ _base_ = ['_base_/cxr.py']
 
 attributor = dict(
     type='VisionAttributor',
-    layer='features.17',
+    layer='features.denseblock3',
     use_softmax=True,
     classifier=dict(source='pkl', path='/content/drive/MyDrive/Prak_MLMI/model/results/regression_checkpoint_best'),
     feat_iba=dict(

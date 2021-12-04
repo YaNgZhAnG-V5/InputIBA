@@ -7,6 +7,7 @@ from .builder import DATASETS
 import os
 from PIL import Image
 
+
 @DATASETS.register_module()
 class CXRDataset(BaseDataset):
     # This is a copied code from https://github.com/CAMP-eXplain-AI/CheXplain-IBA/blob/master/model/cxr_dataset.py
