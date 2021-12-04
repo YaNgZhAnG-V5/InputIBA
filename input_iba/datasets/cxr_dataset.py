@@ -3,10 +3,11 @@ import torch
 from torchvision.transforms import Compose, CenterCrop, ToTensor, Resize, Normalize
 import numpy as np
 from .base import BaseDataset
+from .builder import DATASETS
 import os
 from PIL import Image
 
-
+@DATASETS.register_module()
 class CXRDataset(BaseDataset):
     # This is a copied code from https://github.com/CAMP-eXplain-AI/CheXplain-IBA/blob/master/model/cxr_dataset.py
     # The class support two datasets: CheXpert and BrixIA (both are chest X-ray images)
