@@ -4,7 +4,7 @@ attributor = dict(
     type='VisionAttributor',
     layer='features.denseblock3',
     use_softmax=True,
-    classifier=dict(source='pkl', path='/content/drive/MyDrive/Prak_MLMI/model/results/regression_checkpoint_best'),
+    classifier=dict(source='pkl', path='/content/drive/MyDrive/Prak_MLMI/model/results/checkpoint_best'),
     feat_iba=dict(
         type='VisionFeatureIBA',
         input_or_output="output",

@@ -1,5 +1,5 @@
 dataset_type = 'CXRDataset'
-data_root = '/content/drive/MyDrive/Prak_MLMI'
+data_root = '/content'
 
 data = dict(
     data_loader=dict(batch_size=1, shuffle=True, num_workers=0),
