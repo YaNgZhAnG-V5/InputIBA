@@ -11,6 +11,7 @@ class BaseIBA(nn.Module, metaclass=ABCMeta):
 
     def __init__(self,
                  sigma=1.0,
+                 single_channel_mask=False,
                  initial_alpha=5.0,
                  input_mean=None,
                  input_std=None,
@@ -23,6 +24,7 @@ class BaseIBA(nn.Module, metaclass=ABCMeta):
 
         self.buffer_capacity = None
         self.sigma = sigma
+        self.single_channel_mask = single_channel_mask
         self.initial_alpha = initial_alpha
         self.input_mean = input_mean
         self.input_std = input_std

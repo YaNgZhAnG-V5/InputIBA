@@ -11,6 +11,7 @@ class VisionInputIBA(BaseInputIBA):
                  input_tensor,
                  input_mask,
                  sigma=1.0,
+                 single_channel_mask=False,
                  initial_alpha=5.0,
                  input_mean=None,
                  input_std=None,
@@ -21,6 +22,7 @@ class VisionInputIBA(BaseInputIBA):
             input_tensor=input_tensor,
             input_mask=input_mask,
             sigma=sigma,
+            single_channel_mask=single_channel_mask,
             initial_alpha=initial_alpha,
             input_mean=input_mean,
             input_std=input_std,
@@ -36,6 +38,8 @@ class VisionInputIBA(BaseInputIBA):
 
     def init_alpha_and_kernel(self):
         shape = self.input_mask.shape
+        if self.single_channel_mask:
+            shape = self.input_mask.mean(1, keepdim=True).shape
         self.alpha = nn.Parameter(
             torch.full(shape, self.initial_alpha, device=self.device),
             requires_grad=True)
@@ -44,7 +48,7 @@ class VisionInputIBA(BaseInputIBA):
             kernel_size = int(round(
                 2 * self.sigma)) * 2 + 1  # Cover 2.5 stds in both directions
             self.smooth = _SpatialGaussianKernel(kernel_size, self.sigma,
-                                                 shape[1]).to(self.device)
+                                                 self.input_mask.shape[1]).to(self.device)
         else:
             self.smooth = None
 

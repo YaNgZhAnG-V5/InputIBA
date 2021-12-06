@@ -6,6 +6,7 @@ from .base import BaseDataset
 from .builder import DATASETS
 import os
 from PIL import Image
+import matplotlib.pyplot as plt
 
 
 @DATASETS.register_module()
@@ -46,6 +47,12 @@ class CXRDataset(BaseDataset):
                 Normalize(mean, std)
             ])
         self.transform = data_transforms
+
+        # Normalization transform does (x - mean) / std
+        # To denormalize use mean* = (-mean/std) and std* = (1/std)
+        self.demean = [-m / s for m, s in zip(self.mean, self.std)]
+        self.destd = [1 / s for s in self.std]
+        self.denormalization_transform = torchvision.transforms.Normalize(self.demean, self.destd, inplace=False)
         self.transform_bb = transform_bb
         self.path_to_images = path_to_images
         if not fine_tune:
@@ -150,6 +157,11 @@ class CXRDataset(BaseDataset):
         pos_neg_weights = pos_neg_weights.cuda()
         pos_neg_weights = pos_neg_weights.type(torch.cuda.FloatTensor)
         return pos_neg_weights
+
+    def imshow(self, image_tensor, label):
+        denorm_image = self.denormalization_transform(image_tensor)
+        plt.imshow(denorm_image.permute(1, 2, 0).detach().cpu())
+        plt.title(self.PRED_LABEL[label])
 
 
 class RescaleBB(object):

@@ -10,7 +10,7 @@ attributor = dict(
         input_or_output="output",
         active_neurons_threshold=0.01,
         initial_alpha=5.0),
-    input_iba=dict(type='VisionInputIBA', initial_alpha=5.0, sigma=1.0),
+    input_iba=dict(type='VisionInputIBA', initial_alpha=5.0, sigma=1.0, single_channel_mask=True),
     gan=dict(
         type='VisionWGAN',
         generator=dict(type='VisionGenerator'),

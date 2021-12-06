@@ -9,6 +9,7 @@ class BaseInputIBA(BaseIBA):
                  input_tensor,
                  input_mask,
                  sigma=1.0,
+                 single_channel_mask=False,
                  initial_alpha=5.0,
                  input_mean=None,
                  input_std=None,
@@ -17,6 +18,7 @@ class BaseInputIBA(BaseIBA):
                  device='cuda:0'):
         super(BaseInputIBA, self).__init__(
             sigma=sigma,
+            single_channel_mask=single_channel_mask,
             initial_alpha=initial_alpha,
             input_mean=input_mean,
             input_std=input_std,
