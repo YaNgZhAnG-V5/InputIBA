@@ -85,8 +85,8 @@ class SanityCheck(BaseEvaluation):
             ssim_all (dict): key 'ssim_val'. ssim values under all the
             perturbation settings.
         """
-        assert check in ['gan', 'input_iba'], \
-            f"check must be one of 'gan' or 'input_iba', but got {check}"
+        assert check in ['iba', 'gan', 'input_iba'], \
+            f"check must be one of 'iba', 'gan' or 'input_iba', but got {check}"
         if save_heatmaps:
             assert save_dir is not None, \
                 "if save_masks, save_dir must not be None"
@@ -145,8 +145,19 @@ class SanityCheck(BaseEvaluation):
             self.attributor.use_softmax,
             batch_size=attr_cfg['feat_iba']['batch_size'])
 
-        _ = self.attributor.train_feat_iba(
-            input_tensor, closure, attr_cfg['feat_iba'], logger=self.logger)
+        if check == 'iba':
+            perturb_model(self.attributor.classifier, perturb_layers)
+            feat_mask = self.attributor.train_feat_iba(
+                input_tensor, closure, attr_cfg['feat_iba'], logger=self.logger)
+            ssim_val = self.ssim(ori_input_mask, feat_mask)
+            if save_heatmaps:
+                feat_mask = (feat_mask * 255).astype(np.uint8)
+                out_file = osp.join(save_dir, f"{perturb_layers[-1]}")
+                self.attributor.show_mask(feat_mask, out_file=out_file)
+            return ssim_val
+        else:
+            _ = self.attributor.train_feat_iba(
+                input_tensor, closure, attr_cfg['feat_iba'], logger=self.logger)
         if check == 'gan':
             perturb_model(self.attributor.classifier, perturb_layers)
             is_perturbed = True

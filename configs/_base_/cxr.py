@@ -7,5 +7,7 @@ data = dict(
         type=dataset_type,
         path_to_images=data_root + '/NIH small', #BrixIAsmall
         label_path='/content/drive/MyDrive/Prak_MLMI/model/labels',
+        fold='BBox',
+        finding='Cardiomegaly',
     )
 )

@@ -52,8 +52,9 @@ class CXRDataset(BaseDataset):
         # To denormalize use mean* = (-mean/std) and std* = (1/std)
         demean = [-m / s for m, s in zip(mean, std)]
         destd = [1 / s for s in std]
-        self.denormalization_transform = torchvision.transforms.Normalize(demean, destd, inplace=False)
-        self.transform_bb = transform_bb
+        self.denormalization_transform = Normalize(demean, destd, inplace=False)
+        if self.fold=='BBox':
+            self.transform_bb = RescaleBB(224, 1024)
         self.path_to_images = path_to_images
         if not fine_tune:
             self.df = pd.read_csv(label_path + "/nih_original_split.csv")
